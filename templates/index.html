@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ThreatDecoder AI - Dashboard</title>
+  <script>
+    if ((localStorage.getItem('theme') || 'dark') === 'light') {
+      document.documentElement.classList.add('light-mode');
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="app-screen dashboard-screen">
+  <header class="dashboard-header">
+    <div class="dashboard-userline">
+      <div class="dashboard-userleft">
+        <button id="account-menu-button" class="account-menu-button" type="button" aria-expanded="false">
+          <svg class="header-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M12 3l7 3v5c0 4.6-2.9 8.4-7 10-4.1-1.6-7-5.4-7-10V6l7-3z"></path>
+          </svg>
+          <span class="slash-divider">/</span>
+          <span class="header-email">{{ user_email or 'connected@gmail.com' }}</span>
+          <svg class="header-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M6 9l6 6 6-6"></path>
+          </svg>
+        </button>
+        <div id="account-menu" class="account-menu hidden">
+          {% for account_email in accounts or [] %}
+          <button class="account-option{% if account_email == user_email %} is-active{% endif %}" type="button" data-account-email="{{ account_email }}">
+            <span>{{ account_email }}</span>
+            {% if account_email == user_email %}<span class="account-check">Active</span>{% endif %}
+          </button>
+          {% endfor %}
+          <a class="account-option add-account-option" href="/auth/google?add_account=1">+ Add account</a>
+        </div>
+      </div>
+
+      <div class="dashboard-userright">
+        <button id="theme-toggle" class="theme-toggle-button" type="button" aria-label="Toggle theme">
+          <span class="theme-toggle-label theme-dark-label">Dark</span>
+          <span class="theme-toggle-knob"></span>
+          <span class="theme-toggle-label theme-light-label">Light</span>
+        </button>
+        <button class="header-icon-button" type="button" aria-label="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span class="notification-dot"></span>
+        </button>
+        <a class="header-avatar" href="/logout">{{ ((user_email or 'A')[:2])|upper }}</a>
+      </div>
+    </div>
+
+    <nav class="dashboard-nav">
+      <button id="sync-btn" class="dashboard-nav-link dashboard-refresh-link" type="button">
+        <span id="sync-spinner" class="hidden"></span>
+        <span>Refresh</span>
+      </button>
+      <button id="tab-all" class="dashboard-nav-link is-active" type="button">Top 20 Inbox</button>
+      <button id="tab-suspicious" class="dashboard-nav-link" type="button">Suspicious <span id="tab-suspicious-count">0</span></button>
+      <a class="dashboard-nav-link" href="#panel-results">Settings</a>
+    </nav>
+  </header>
+
+  <main class="dashboard-wrap">
+    <section class="screenshot-stats">
+      <article class="screenshot-stat stat-white">
+        <div class="stat-label">Total Emails</div>
+        <div id="stat-total" class="screenshot-stat-value mono">0</div>
+        <div class="stat-subtext">last 20 messages</div>
+      </article>
+      <article class="screenshot-stat stat-red">
+        <div class="stat-label">Threats Detected</div>
+        <div id="stat-spoofed" class="screenshot-stat-value mono">0</div>
+        <div class="stat-subtext">requires action</div>
+      </article>
+      <article class="screenshot-stat stat-orange">
+        <div class="stat-label">Spam Filtered</div>
+        <div id="stat-clusters" class="screenshot-stat-value mono">0</div>
+        <div class="stat-subtext">auto-quarantined</div>
+      </article>
+      <article class="screenshot-stat stat-green">
+        <div class="stat-label">Needs Review</div>
+        <div id="stat-risk" class="screenshot-stat-value mono">0</div>
+        <div class="stat-subtext">flagged for caution</div>
+        <div class="hidden"><span id="stat-risk-bar"></span></div>
+      </article>
+    </section>
+
+    <div id="campaign-banner" class="campaign-banner hidden">
+      <strong>Campaign Detected</strong>
+      <span id="campaign-banner-text"></span>
+    </div>
+
+    <section class="overview-grid">
+      <article class="overview-card activity-card">
+        <div class="overview-head">
+          <div>
+            <h3>Email Activity</h3>
+            <p>Past 7 days</p>
+          </div>
+          <div class="activity-legend">
+            <span class="legend-threat">Threats</span>
+            <span class="legend-spam">Spam</span>
+            <span class="legend-safe">Safe</span>
+          </div>
+        </div>
+        <svg id="activity-chart" class="activity-chart" viewBox="0 0 800 220" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="activity-fill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="rgba(255,106,60,0.35)"></stop>
+              <stop offset="100%" stop-color="rgba(255,106,60,0)"></stop>
+            </linearGradient>
+          </defs>
+          <path id="activity-area" fill="url(#activity-fill)"></path>
+          <path id="activity-line" fill="none" stroke="#ff5b32" stroke-width="3" stroke-linecap="round"></path>
+        </svg>
+      </article>
+
+      <article class="overview-card breakdown-card">
+        <div class="overview-head">
+          <div>
+            <h3>Threat Breakdown</h3>
+            <p>All-time distribution</p>
+          </div>
+        </div>
+        <div id="breakdown-bars" class="breakdown-bars"></div>
+        <div class="breakdown-footer">
+          <span class="trend-arrow">↗</span>
+          <span id="breakdown-footer-text">Threat rate stable this week</span>
+        </div>
+      </article>
+    </section>
+
+    <section class="dashboard-columns">
+      <div class="dashboard-left-column">
+        <section class="mail-panel">
+          <div class="mail-panel-head">
+            <div class="mail-panel-titleblock">
+              <h2 id="list-heading">All Emails</h2>
+              <div id="pipeline-count" class="pipeline-caption">Scanning your latest 20 inbox emails first.</div>
+            </div>
+            <div class="mail-panel-actions">
+              <span class="messages-count"><span id="message-total">0</span> messages</span>
+              <button id="mail-search-toggle" class="mail-search-button" type="button" aria-label="Search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+              </button>
+              <button id="delete-suspicious-btn" class="delete-button hidden" type="button">Move Suspicious to Trash</button>
+            </div>
+          </div>
+
+          <div class="mail-search-row hidden" id="mail-search-row">
+            <form id="search-form">
+              <div class="mail-search-input-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input id="search-input" type="text" placeholder="Search emails...">
+              </div>
+              <button id="clear-search-btn" class="search-clear-button hidden" type="button">Clear</button>
+            </form>
+          </div>
+
+          <div id="pipeline-list" class="mail-list">
+            <div class="list-placeholder">Loading inbox...</div>
+          </div>
+
+          <div id="scan-actions" class="scan-actions hidden">
+            <button id="load-more-btn" class="load-more-button" type="button">Scan Next 20 Emails</button>
+            <button id="scan-all-btn" class="scan-all-button" type="button">Scan Entire Inbox</button>
+          </div>
+        </section>
+      </div>
+
+      <div class="dashboard-right-column">
+        <section id="panel-empty" class="detail-panel-lite">
+          <div class="detail-empty-copy">Select an email to view its analysis.</div>
+        </section>
+
+        <section id="panel-scanning" class="detail-panel-lite hidden">
+          <div class="detail-empty-copy">
+            <div id="scanning-title">Scanning your inbox...</div>
+          </div>
+        </section>
+
+        <section id="panel-error" class="detail-panel-lite hidden">
+          <div id="panel-error-text" class="detail-empty-copy"></div>
+        </section>
+
+        <section id="panel-results" class="inspector-panel hidden">
+          <div class="inspector-header">
+            <div>
+              <div id="res-sender" class="inspector-sender"></div>
+              <div id="res-subject" class="inspector-meta mono"></div>
+            </div>
+            <div class="inspector-score">
+              <div id="res-gauge" class="risk-gauge">
+                <div class="risk-gauge-ring"></div>
+                <div class="risk-gauge-center">
+                  <strong id="res-gauge-value" class="mono">0%</strong>
+                  <span>confidence</span>
+                </div>
+              </div>
+              <div id="res-risk" class="mono"></div>
+              <div id="res-badge" class="threat-badge"></div>
+            </div>
+          </div>
+
+          <div class="inspector-actions">
+            <button id="feedback-safe-btn" class="inspector-action-button" type="button">Mark Safe</button>
+            <button id="feedback-scam-btn" class="inspector-action-button" type="button">Mark Scam</button>
+            <button id="feedback-unsure-btn" class="inspector-action-button" type="button">Not Sure</button>
+            <button id="safe-sender-btn" class="inspector-action-button" type="button">Add to Safe Senders</button>
+            <button id="block-sender-btn" class="inspector-action-button" type="button">Block Sender</button>
+            <button id="export-report-btn" class="inspector-action-button inspector-action-button-primary" type="button">Export Report</button>
+          </div>
+
+          <div id="feedback-status" class="inspector-feedback-status hidden"></div>
+
+          <div class="inspector-tabbar">
+            <button id="inspector-tab-overview" class="inspector-tab is-active" type="button">Overview</button>
+            <button id="inspector-tab-investigation" class="inspector-tab" type="button">AI Investigation</button>
+            <button id="inspector-tab-intel" class="inspector-tab" type="button">Threat Intelligence</button>
+          </div>
+
+          <div id="inspector-section-overview" class="inspector-section">
+            <div class="inspector-grid">
+              <section id="res-why-flagged-section" class="inspector-card hidden">
+                <div class="inspector-title">Why GuardMail AI flagged this</div>
+                <div id="res-why-flagged"></div>
+                <div id="res-tactic-tag" class="threat-badge is-high hidden"></div>
+                <p id="res-tactic-explanation" class="detail-tactic hidden"></p>
+              </section>
+
+              <section class="inspector-card">
+                <div id="res-reasons-title" class="inspector-title">Fraud Reasons</div>
+                <div id="res-reasons"></div>
+              </section>
+
+              <section class="inspector-card">
+                <div class="inspector-title">Signal Analysis</div>
+                <div id="res-signals"></div>
+              </section>
+
+              <section class="inspector-card">
+                <div class="inspector-title">Confidence Breakdown</div>
+                <div id="res-confidence"></div>
+              </section>
+
+              <section class="inspector-card">
+                <div class="inspector-title">Authentication Chain</div>
+                <div id="res-auth" class="auth-grid"></div>
+                <div id="res-auth-flags"></div>
+                <div id="res-headers"></div>
+              </section>
+            </div>
+
+            <section class="inspector-card body-card">
+              <div class="inspector-title">Email Body</div>
+              <div id="res-body" class="detail-body-copy"></div>
+            </section>
+
+            <section class="inspector-card body-card">
+              <div class="inspector-title">Links</div>
+              <div id="res-links"></div>
+            </section>
+
+            <section class="inspector-card body-card">
+              <div class="inspector-title">Attachment Warnings</div>
+              <div id="res-attachments"></div>
+            </section>
+          </div>
+
+          <div id="inspector-section-investigation" class="inspector-section hidden">
+            <section class="inspector-card body-card">
+              <div class="inspector-title">AI Investigation</div>
+              <div id="res-investigation-summary" class="investigation-summary"></div>
+              <div id="res-investigation-points"></div>
+            </section>
+          </div>
+
+          <div id="inspector-section-intel" class="inspector-section hidden">
+            <section class="inspector-card body-card">
+              <div class="inspector-title">Threat Intelligence</div>
+              <p class="detail-tactic">Local threat intelligence based on sender, links, attachments, and app rules.</p>
+              <div id="res-threat-intel"></div>
+            </section>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="scanning-overlay" class="scanning-overlay">
+    <div class="scanning-grid"></div>
+    <div id="matrix-rain" class="matrix-rain" aria-hidden="true"></div>
+    <div id="matrix-glyphs" class="matrix-glyphs" aria-hidden="true"></div>
+    <div class="scanning-card preauth-card">
+      <div class="shield-stage">
+        <svg class="minimal-shield draw-shield" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M50 8 L18 18 V46 C18 68 32 86 50 92 C68 86 82 68 82 46 V18 Z"></path>
+        </svg>
+        <div class="shield-letter">TD</div>
+        <div class="scan-beam"></div>
+      </div>
+      <h2 id="overlay-stage" class="overlay-title">Initializing ThreatDecoder AI...</h2>
+      <div class="thin-progress"><span id="overlay-progress-bar"></span></div>
+      <div class="overlay-status">
+        <div class="overlay-status-line">Scanning inbox...</div>
+        <div id="overlay-subcopy" class="overlay-email-progress">Preparing Gmail and ML analysis.</div>
+      </div>
+      <div class="scanning-terminal">
+        <div id="overlay-log" class="scanning-log"></div>
+        <span class="scanning-cursor"></span>
+      </div>
+    </div>
+  </div>
+
+  <aside id="copilot-shell" class="copilot-shell">
+    <button id="copilot-toggle" class="copilot-toggle" type="button" aria-expanded="false" aria-controls="copilot-panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <path d="M12 3l7 3v5c0 4.6-2.9 8.4-7 10-4.1-1.6-7-5.4-7-10V6l7-3z"></path>
+        <path d="M9 11h6M9 15h4"></path>
+      </svg>
+      <span>Security Copilot</span>
+    </button>
+
+    <section id="copilot-panel" class="copilot-panel hidden" aria-label="Security Copilot">
+      <header class="copilot-header">
+        <div>
+          <div class="copilot-title">Security Copilot</div>
+          <div id="copilot-context" class="copilot-context">Ask about this app or the selected email.</div>
+        </div>
+        <button id="copilot-close" class="copilot-close" type="button" aria-label="Close copilot">×</button>
+      </header>
+
+      <div id="copilot-suggestions" class="copilot-suggestions">
+        <button class="copilot-suggestion" type="button" data-copilot-question="How do I scan my inbox?">How do I scan my inbox?</button>
+        <button class="copilot-suggestion" type="button" data-copilot-question="What does Scam Alert mean?">What does Scam Alert mean?</button>
+        <button class="copilot-suggestion" type="button" data-copilot-question="Why is this suspicious?">Why is this suspicious?</button>
+      </div>
+
+      <div id="copilot-log" class="chat-log"></div>
+
+      <form id="copilot-form" class="chat-form">
+        <input id="copilot-input" class="chat-input" type="text" placeholder='Ask "What should I do?"'>
+        <button id="copilot-send" class="inspector-action-button inspector-action-button-primary" type="submit">Ask</button>
+      </form>
+    </section>
+  </aside>
+
+  <script src="/static/assistant.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

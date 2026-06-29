@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ThreatDecoder AI</title>
+  <script>
+    if ((localStorage.getItem('theme') || 'dark') === 'light') {
+      document.documentElement.classList.add('light-mode');
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="app-screen landing-screen">
+  <header class="simple-header">
+    <a class="logo-link" href="/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <path d="M12 3l7 3v5c0 4.6-2.9 8.4-7 10-4.1-1.6-7-5.4-7-10V6l7-3z"></path>
+      </svg>
+      <span>ThreatDecoder</span>
+      <span class="logo-accent">AI</span>
+    </a>
+
+    <div class="header-actions">
+      <button type="button" class="theme-toggle-button" data-theme-toggle aria-label="Toggle theme">
+        <span class="theme-toggle-label theme-dark-label">Dark</span>
+        <span class="theme-toggle-knob"></span>
+        <span class="theme-toggle-label theme-light-label">Light</span>
+      </button>
+      <button type="button" class="connect-button" data-connect-gmail data-target="/auth/google">Connect Gmail</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="landing-hero">
+      <canvas class="particle-field" data-particle-field></canvas>
+      <div class="landing-wrap">
+        <div class="hero-copy-block">
+          <h1>
+            <span class="word-up" style="animation-delay:0ms">Scan</span>
+            <span class="word-up" style="animation-delay:120ms">your</span>
+            <span class="word-up" style="animation-delay:240ms">inbox</span>
+            <span class="word-up" style="animation-delay:360ms">for</span>
+            <span class="word-up" style="animation-delay:480ms">threats.</span>
+          </h1>
+          <p class="word-up" style="animation-delay:720ms">
+            Advanced AI-powered threat detection to protect your email from scams,
+            phishing, and malicious content.
+          </p>
+          <div class="hero-action-row word-up" style="animation-delay:880ms">
+            <button type="button" class="primary-link" data-connect-gmail data-target="/auth/google">
+              <span>Connect Gmail</span>
+              <span class="arrow-nudge">→</span>
+            </button>
+          </div>
+        </div>
+
+        <section class="metric-row">
+          <article class="metric-item">
+            <strong class="mono">164,552</strong>
+            <span>emails trained</span>
+          </article>
+          <article class="metric-item">
+            <strong class="mono">99.42%</strong>
+            <span>accuracy</span>
+          </article>
+          <article class="metric-item">
+            <strong class="mono">6</strong>
+            <span>detection layers</span>
+          </article>
+        </section>
+      </div>
+    </section>
+
+    <section class="max-wrap landing-features">
+      <div class="feature-grid-minimal">
+        <article class="feature-card">
+          <div class="feature-icon">
+            <svg class="spin-slow" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M12 3l7 3v5c0 4.6-2.9 8.4-7 10-4.1-1.6-7-5.4-7-10V6l7-3z"></path>
+            </svg>
+          </div>
+          <h3>Real-time Threat Detection</h3>
+          <p>Continuous monitoring catches phishing, scams, and impersonation attempts the moment they hit your inbox.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">
+            <svg class="pulse-soft" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M12 2l8 4v6c0 5-3.5 9.5-8 10-4.5-.5-8-5-8-10V6l8-4z"></path>
+              <path d="M9 11h6"></path>
+              <path d="M12 8v6"></path>
+            </svg>
+          </div>
+          <h3>AI-Powered Analysis</h3>
+          <p>Ensemble ML models analyze content, headers, and sender reputation for accurate threat scoring.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">
+            <svg class="scan-eye" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </div>
+          <h3>Sender Verification</h3>
+          <p>SPF, DKIM, and DMARC validation paired with historical sender behavior analysis.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">
+            <svg class="bounce-link" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M10 13a5 5 0 0 0 7.07 0l1.41-1.41a5 5 0 1 0-7.07-7.07L10 6"></path>
+              <path d="M14 11a5 5 0 0 0-7.07 0L5.5 12.41a5 5 0 0 0 7.07 7.07L14 18"></path>
+            </svg>
+          </div>
+          <h3>Link &amp; Attachment Scanning</h3>
+          <p>Every URL and attachment is sandboxed and scored before you ever click.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="landing-footer">ThreatDecoder AI — UI prototype</footer>
+
+  <div id="preauth-overlay" class="scanning-overlay">
+    <div class="scanning-grid"></div>
+    <div class="scanning-card preauth-card">
+      <div class="shield-stage">
+        <svg class="minimal-shield draw-shield" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M50 8 L18 18 V46 C18 68 32 86 50 92 C68 86 82 68 82 46 V18 Z"></path>
+        </svg>
+        <div class="shield-letter">TD</div>
+        <div class="scan-beam"></div>
+      </div>
+      <h2 class="overlay-title landing-overlay-title">Connecting to Gmail...</h2>
+      <div class="thin-progress"><span id="preauth-progress"></span></div>
+      <div class="scanning-terminal">
+        <div id="preauth-log" class="scanning-log"></div>
+        <span class="scanning-cursor"></span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var toggles = document.querySelectorAll('[data-theme-toggle]');
+      toggles.forEach(function (toggle) {
+        toggle.addEventListener('click', function () {
+          var nextLight = !document.documentElement.classList.contains('light-mode');
+          document.documentElement.classList.toggle('light-mode', nextLight);
+          document.body.classList.toggle('light-mode', nextLight);
+          localStorage.setItem('theme', nextLight ? 'light' : 'dark');
+        });
+      });
+
+      var field = document.querySelector('[data-particle-field]');
+      if (field) {
+        var ctx = field.getContext('2d');
+        var points = [];
+        function resize() {
+          field.width = field.offsetWidth;
+          field.height = field.offsetHeight;
+        }
+        function seed() {
+          points = Array.from({ length: 70 }, function () {
+            return {
+              x: Math.random() * field.width,
+              y: Math.random() * field.height,
+              vx: (Math.random() - 0.5) * 0.15,
+              vy: -Math.random() * 0.3 - 0.05
+            };
+          });
+        }
+        function draw() {
+          ctx.clearRect(0, 0, field.width, field.height);
+          points.forEach(function (p) {
+            p.x += p.vx;
+            p.y += p.vy;
+            if (p.y < -10) { p.y = field.height + 10; p.x = Math.random() * field.width; }
+            if (p.x < 0) p.x = field.width;
+            if (p.x > field.width) p.x = 0;
+          });
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          points.forEach(function (p) {
+            ctx.globalAlpha = 0.15;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 1.2, 0, Math.PI * 2);
+            ctx.fill();
+          });
+          for (var i = 0; i < points.length; i++) {
+            for (var j = i + 1; j < points.length; j++) {
+              var dx = points[i].x - points[j].x;
+              var dy = points[i].y - points[j].y;
+              var d = Math.hypot(dx, dy);
+              if (d < 120) {
+                ctx.strokeStyle = 'rgba(255,255,255,' + (0.08 * (1 - d / 120)) + ')';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(points[i].x, points[i].y);
+                ctx.lineTo(points[j].x, points[j].y);
+                ctx.stroke();
+              }
+            }
+          }
+          requestAnimationFrame(draw);
+        }
+        resize();
+        seed();
+        draw();
+        window.addEventListener('resize', function () {
+          resize();
+          seed();
+        });
+      }
+
+      var buttons = document.querySelectorAll('[data-connect-gmail]');
+      var overlay = document.getElementById('preauth-overlay');
+      var log = document.getElementById('preauth-log');
+      var progress = document.getElementById('preauth-progress');
+
+      function runConnectFlow(target) {
+        overlay.classList.add('is-visible');
+        log.innerHTML = '';
+        progress.style.width = '0%';
+
+        [
+          ['Connecting to Gmail API...', '18%'],
+          ['OAuth authentication ready', '42%'],
+          ['Preparing secure inbox scan', '66%'],
+          ['Loading ML models...', '84%'],
+          ['Redirecting to Google sign-in', '100%']
+        ].forEach(function (step, index) {
+          window.setTimeout(function () {
+            var line = document.createElement('div');
+            line.className = 'scanning-log-line' + (index > 2 ? ' is-subtle' : '');
+            line.textContent = step[0];
+            log.appendChild(line);
+            progress.style.width = step[1];
+          }, index * 260);
+        });
+
+        window.setTimeout(function () {
+          window.location.href = target;
+        }, 1400);
+      }
+
+      buttons.forEach(function (button) {
+        button.addEventListener('click', function () {
+          runConnectFlow(button.getAttribute('data-target') || '/auth/google');
+        });
+      });
+    }());
+  </script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+# Security: Never leak private environment keys
+.env
+.env.local
+
+# Python: Ignore compiled bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environments: Ignore local virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Operating System clutter files
+.DS_StoreD
+Thumbs.db
+
+# Vercel: Ignore local development build logs
+.vercel/
+
+# ML: Ignore local training dataset and trained model artifacts
+phishing_emails.csv
+phishing_email.csv
+CEAS_08.csv
+Enron.csv
+Ling.csv
+Nazario.csv
+Nigerian_Fraud.csv
+SpamAssasin.csv
+model.pkl
+vectorizer.pkl
+evaluation_report.json
+
+# App: Ignore local user-review state
+app_storage.json

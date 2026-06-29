@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GuardMail AI - Connect Gmail</title>
+  <script>
+    if ((localStorage.getItem('theme') || 'dark') === 'light') {
+      document.documentElement.classList.add('light-mode');
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="app-screen login-screen">
+  <header class="simple-header">
+    <a class="logo-link" href="/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <path d="M12 3l7 3v5c0 4.6-2.9 8.4-7 10-4.1-1.6-7-5.4-7-10V6l7-3z"></path>
+      </svg>
+      <span>GuardMail</span>
+      <span class="logo-accent">AI</span>
+    </a>
+
+    <button type="button" class="theme-toggle-button" data-theme-toggle aria-label="Toggle theme">
+      <span class="theme-toggle-label theme-dark-label">Dark</span>
+      <span class="theme-toggle-knob"></span>
+      <span class="theme-toggle-label theme-light-label">Light</span>
+    </button>
+  </header>
+
+  <main class="login-layout">
+    <section class="login-copy-block">
+      <div class="login-kicker">Gmail threat review</div>
+      <h1 class="login-hero-title">Scan your inbox without leaving anything exposed.</h1>
+      <p class="login-hero-copy">
+        GuardMail AI connects to Gmail, reviews your recent inbox activity, and
+        highlights suspicious messages with clear analysis before you click anything risky.
+      </p>
+      <div class="login-pill-row">
+        <span class="login-pill">Real Gmail scan</span>
+        <span class="login-pill">Safe sender controls</span>
+        <span class="login-pill">Local ML detection</span>
+      </div>
+    </section>
+
+    <section class="login-center-shell">
+      <div class="login-minimal-card">
+        <div class="login-brand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M12 3l7 3v5c0 4.6-2.9 8.4-7 10-4.1-1.6-7-5.4-7-10V6l7-3z"></path>
+          </svg>
+          <span>GuardMail AI</span>
+        </div>
+        <h1>Connect Gmail</h1>
+        <p>Sign in with Google to start scanning your inbox and load the dashboard.</p>
+
+        {% if error %}
+        <div class="login-error">{{ error }}</div>
+        {% endif %}
+
+        <button type="button" class="connect-button wide-connect google-connect-button" data-connect-gmail data-target="/auth/google">
+          <svg class="google-glyph" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.2-.9 2.3-1.9 3.1l3 2.3c1.8-1.7 2.8-4.1 2.8-6.9 0-.7-.1-1.5-.2-2.2H12z"></path>
+            <path fill="#34A853" d="M12 21c2.7 0 5-0.9 6.7-2.5l-3-2.3c-.8.6-2 1-3.7 1-2.8 0-5.2-1.9-6-4.5l-3.1 2.4C4.7 18.8 8.1 21 12 21z"></path>
+            <path fill="#FBBC05" d="M6 12.7c-.2-.6-.3-1.2-.3-1.9s.1-1.3.3-1.9L2.9 6.5C2.3 7.8 2 9.3 2 10.8s.3 3 1 4.3L6 12.7z"></path>
+            <path fill="#4285F4" d="M12 4.4c1.5 0 2.9.5 3.9 1.5l2.9-2.9C17 1.4 14.7.5 12 .5 8.1.5 4.7 2.7 2.9 6.5L6 8.9c.8-2.6 3.2-4.5 6-4.5z"></path>
+          </svg>
+          <span>Continue with Google</span>
+        </button>
+
+        <div class="login-trust-note">We only request Gmail access needed for scanning and inbox review.</div>
+      </div>
+    </section>
+  </main>
+
+  <div id="preauth-overlay" class="scanning-overlay">
+    <div class="scanning-grid"></div>
+    <div class="scanning-card preauth-card">
+      <div class="shield-stage">
+        <svg class="minimal-shield draw-shield" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M50 8 L18 18 V46 C18 68 32 86 50 92 C68 86 82 68 82 46 V18 Z"></path>
+        </svg>
+        <div class="shield-letter">TD</div>
+        <div class="scan-beam"></div>
+      </div>
+      <h2 class="overlay-title landing-overlay-title">Connecting to Gmail...</h2>
+      <div class="thin-progress"><span id="preauth-progress"></span></div>
+      <div class="scanning-terminal">
+        <div id="preauth-log" class="scanning-log"></div>
+        <span class="scanning-cursor"></span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var toggles = document.querySelectorAll('[data-theme-toggle]');
+      toggles.forEach(function (toggle) {
+        toggle.addEventListener('click', function () {
+          var nextLight = !document.documentElement.classList.contains('light-mode');
+          document.documentElement.classList.toggle('light-mode', nextLight);
+          document.body.classList.toggle('light-mode', nextLight);
+          localStorage.setItem('theme', nextLight ? 'light' : 'dark');
+        });
+      });
+
+      var button = document.querySelector('[data-connect-gmail]');
+      var overlay = document.getElementById('preauth-overlay');
+      var log = document.getElementById('preauth-log');
+      var progress = document.getElementById('preauth-progress');
+      if (!button) return;
+
+      button.addEventListener('click', function () {
+        overlay.classList.add('is-visible');
+        log.innerHTML = '';
+        progress.style.width = '0%';
+
+        [
+          ['Connecting to Gmail API...', '18%'],
+          ['OAuth authentication successful', '42%'],
+          ['Scanning inbox access permissions', '66%'],
+          ['Loading ML models...', '84%'],
+          ['Redirecting to Google sign-in', '100%']
+        ].forEach(function (step, index) {
+          window.setTimeout(function () {
+            var line = document.createElement('div');
+            line.className = 'scanning-log-line' + (index > 2 ? ' is-subtle' : '');
+            line.textContent = step[0];
+            log.appendChild(line);
+            progress.style.width = step[1];
+          }, index * 260);
+        });
+
+        window.setTimeout(function () {
+          window.location.href = button.getAttribute('data-target') || '/auth/google';
+        }, 1400);
+      });
+    }());
+  </script>
+</body>
+</html>
