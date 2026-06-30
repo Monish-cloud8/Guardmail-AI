@@ -60,6 +60,9 @@ python train_model.py
 `train_model.py` prints classification metrics for both candidate models and
 saves the evaluation summary as JSON.
 
+If one of the optional dataset files is missing, the trainer now skips it and
+continues with the datasets that are available.
+
 ## 5. Run the app
 
 ```bash

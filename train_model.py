@@ -1,5 +1,6 @@
 import json
 import gzip
+import os
 import pickle
 
 import numpy as np
@@ -36,6 +37,10 @@ DATASETS = [
 
 
 def load_and_normalize(path: str, text_cols: list[str], label_col: str) -> pd.DataFrame:
+    if not os.path.exists(path):
+        print(f"  skipped {path} (file not found)")
+        return pd.DataFrame(columns=["text", "label"])
+
     df = pd.read_csv(path)
     missing = [column for column in text_cols + [label_col] if column not in df.columns]
     if missing:
@@ -52,6 +57,10 @@ def load_and_normalize(path: str, text_cols: list[str], label_col: str) -> pd.Da
 
 def load_dataset() -> pd.DataFrame:
     frames = [load_and_normalize(spec["path"], spec["text_cols"], spec["label_col"]) for spec in DATASETS]
+    frames = [frame for frame in frames if not frame.empty]
+    if not frames:
+        raise FileNotFoundError("No training datasets were found. Put the CSV files in the project root and try again.")
+
     combined = pd.concat(frames, ignore_index=True)
     print(f"Total rows loaded from all {len(DATASETS)} datasets combined: {len(combined)}")
 
