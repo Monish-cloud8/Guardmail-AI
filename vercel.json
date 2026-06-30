@@ -1,6 +1,7 @@
 {
   "functions": {
     "api/**/*.py": {
+      "includeFiles": "{model.pkl.gz,vectorizer.pkl}",
       "excludeFiles": "{**/*.csv,**/*.vsix,**/__pycache__/**,**/*.pyc,.env,.env.*,venv/**,ENV/**,env/**,.venv/**,extension/**,README.md,train_model.py}"
     }
   },
