@@ -15,7 +15,7 @@ ENV/
 env/
 
 # Operating System clutter files
-.DS_StoreD
+.DS_Store
 Thumbs.db
 
 # Vercel: Ignore local development build logs

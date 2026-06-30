@@ -1,4 +1,5 @@
 import json
+import gzip
 import pickle
 
 import numpy as np
@@ -19,7 +20,7 @@ from sklearn.model_selection import train_test_split
 
 from feature_extractor import clean_text, extract_features
 
-MODEL_PATH = "model.pkl"
+MODEL_PATH = "model.pkl.gz"
 VECTORIZER_PATH = "vectorizer.pkl"
 EVALUATION_REPORT_PATH = "evaluation_report.json"
 
@@ -136,8 +137,8 @@ def main():
     evaluation_report["best_model"] = best_name
     print(f"\nBest model: {best_name} (F1={best_f1:.4f}) - saving as {MODEL_PATH}")
 
-    with open(MODEL_PATH, "wb") as model_file:
-        pickle.dump(best_model, model_file)
+    with gzip.open(MODEL_PATH, "wb", compresslevel=9) as model_file:
+        pickle.dump(best_model, model_file, protocol=pickle.HIGHEST_PROTOCOL)
     with open(VECTORIZER_PATH, "wb") as vectorizer_file:
         pickle.dump(vectorizer, vectorizer_file)
     with open(EVALUATION_REPORT_PATH, "w", encoding="utf-8") as report_file:

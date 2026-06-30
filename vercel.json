@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/**/*.py": {
+      "excludeFiles": "{**/*.csv,**/*.vsix,**/__pycache__/**,**/*.pyc,.env,.env.*,venv/**,ENV/**,env/**,.venv/**,extension/**,README.md,train_model.py}"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",

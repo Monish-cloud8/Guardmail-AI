@@ -3,6 +3,7 @@ import re
 import sys
 import json
 import base64
+import gzip
 import pickle
 import email.utils
 from functools import wraps
@@ -42,9 +43,16 @@ GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
 ]
 
-MODEL_PATH = os.path.join(PROJECT_ROOT, "model.pkl")
+MODEL_PATH = os.path.join(PROJECT_ROOT, "model.pkl.gz")
+LEGACY_MODEL_PATH = os.path.join(PROJECT_ROOT, "model.pkl")
 VECTORIZER_PATH = os.path.join(PROJECT_ROOT, "vectorizer.pkl")
-APP_STORAGE_PATH = os.path.join(PROJECT_ROOT, "app_storage.json")
+APP_STORAGE_PATH = os.path.abspath(
+    os.getenv(
+        "APP_STORAGE_PATH",
+        os.path.join("/tmp", "app_storage.json") if os.getenv("VERCEL") else os.path.join(PROJECT_ROOT, "app_storage.json"),
+    )
+)
+APP_STORAGE_CACHE = None
 
 RISK_RULES = [
     {"label": "Scam Alert", "category": "SCAM_ALERT", "min_confidence": 0.95},
@@ -73,13 +81,16 @@ KNOWN_BRANDS = [
 
 def _load_pickle(path):
     try:
-        with open(path, "rb") as f:
+        opener = gzip.open if path.endswith(".gz") else open
+        with opener(path, "rb") as f:
             return pickle.load(f)
     except FileNotFoundError:
         return None
 
 
 ml_model = _load_pickle(MODEL_PATH)
+if ml_model is None:
+    ml_model = _load_pickle(LEGACY_MODEL_PATH)
 ml_vectorizer = _load_pickle(VECTORIZER_PATH)
 TFIDF_FEATURE_NAMES = ml_vectorizer.get_feature_names_out() if ml_vectorizer is not None else None
 
@@ -89,24 +100,39 @@ def _default_app_storage():
 
 
 def _load_app_storage():
+    global APP_STORAGE_CACHE
     try:
         with open(APP_STORAGE_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
-        return _default_app_storage()
+        if APP_STORAGE_CACHE is None:
+            APP_STORAGE_CACHE = _default_app_storage()
+        return APP_STORAGE_CACHE
     except Exception:
-        return _default_app_storage()
+        if APP_STORAGE_CACHE is None:
+            APP_STORAGE_CACHE = _default_app_storage()
+        return APP_STORAGE_CACHE
 
     storage = _default_app_storage()
     storage["feedback"] = data.get("feedback", {}) if isinstance(data.get("feedback"), dict) else {}
     storage["safe_senders"] = sorted({str(v).strip().lower() for v in data.get("safe_senders", []) if str(v).strip()})
     storage["blocked_senders"] = sorted({str(v).strip().lower() for v in data.get("blocked_senders", []) if str(v).strip()})
+    APP_STORAGE_CACHE = storage
     return storage
 
 
 def _save_app_storage(storage: dict):
-    with open(APP_STORAGE_PATH, "w", encoding="utf-8") as f:
-        json.dump(storage, f, indent=2, ensure_ascii=False)
+    global APP_STORAGE_CACHE
+    APP_STORAGE_CACHE = storage
+    try:
+        storage_dir = os.path.dirname(APP_STORAGE_PATH)
+        if storage_dir:
+            os.makedirs(storage_dir, exist_ok=True)
+        with open(APP_STORAGE_PATH, "w", encoding="utf-8") as f:
+            json.dump(storage, f, indent=2, ensure_ascii=False)
+    except OSError:
+        # Vercel functions expose a read-only filesystem outside /tmp.
+        pass
 
 
 def _clean_sender_email(value: str) -> str:

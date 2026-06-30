@@ -42,7 +42,7 @@ Do not commit `.env`, OAuth secrets, access tokens, or private config.
 
 ## 4. Training the model
 
-The app loads `model.pkl` and `vectorizer.pkl` at startup, so train them once
+The app loads `model.pkl.gz` and `vectorizer.pkl` at startup, so train them once
 before running the dashboard.
 
 1. Put the Kaggle CSV datasets in the project root.
@@ -53,7 +53,7 @@ python train_model.py
 ```
 
 3. Confirm these files were created:
-   - `model.pkl`
+   - `model.pkl.gz`
    - `vectorizer.pkl`
    - `evaluation_report.json`
 
