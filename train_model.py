@@ -21,8 +21,9 @@ from sklearn.model_selection import train_test_split
 
 from feature_extractor import clean_text, extract_features
 
-MODEL_PATH = "model.pkl.gz"
-VECTORIZER_PATH = "vectorizer.pkl"
+MODEL_PATH = os.path.join("api", "model.pkl.gz")
+MODEL_LEGACY_PATH = os.path.join("api", "model.pkl")
+VECTORIZER_PATH = os.path.join("api", "vectorizer.pkl")
 EVALUATION_REPORT_PATH = "evaluation_report.json"
 
 DATASETS = [
@@ -146,14 +147,17 @@ def main():
     evaluation_report["best_model"] = best_name
     print(f"\nBest model: {best_name} (F1={best_f1:.4f}) - saving as {MODEL_PATH}")
 
+    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
     with gzip.open(MODEL_PATH, "wb", compresslevel=9) as model_file:
         pickle.dump(best_model, model_file, protocol=pickle.HIGHEST_PROTOCOL)
+    with open(MODEL_LEGACY_PATH, "wb") as legacy_model_file:
+        pickle.dump(best_model, legacy_model_file, protocol=pickle.HIGHEST_PROTOCOL)
     with open(VECTORIZER_PATH, "wb") as vectorizer_file:
-        pickle.dump(vectorizer, vectorizer_file)
+        pickle.dump(vectorizer, vectorizer_file, protocol=pickle.HIGHEST_PROTOCOL)
     with open(EVALUATION_REPORT_PATH, "w", encoding="utf-8") as report_file:
         json.dump(evaluation_report, report_file, indent=2)
 
-    print(f"Saved {MODEL_PATH}, {VECTORIZER_PATH}, and {EVALUATION_REPORT_PATH}")
+    print(f"Saved {MODEL_PATH}, {MODEL_LEGACY_PATH}, {VECTORIZER_PATH}, and {EVALUATION_REPORT_PATH}")
 
 
 if __name__ == "__main__":

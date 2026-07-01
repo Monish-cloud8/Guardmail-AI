@@ -43,9 +43,13 @@ GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
 ]
 
-MODEL_PATH = os.path.join(PROJECT_ROOT, "model.pkl.gz")
-LEGACY_MODEL_PATH = os.path.join(PROJECT_ROOT, "model.pkl")
-VECTORIZER_PATH = os.path.join(PROJECT_ROOT, "vectorizer.pkl")
+API_DIR = os.path.dirname(__file__)
+MODEL_PATH = os.path.join(API_DIR, "model.pkl.gz")
+LEGACY_MODEL_PATH = os.path.join(API_DIR, "model.pkl")
+VECTORIZER_PATH = os.path.join(API_DIR, "vectorizer.pkl")
+ROOT_MODEL_PATH = os.path.join(PROJECT_ROOT, "model.pkl.gz")
+ROOT_LEGACY_MODEL_PATH = os.path.join(PROJECT_ROOT, "model.pkl")
+ROOT_VECTORIZER_PATH = os.path.join(PROJECT_ROOT, "vectorizer.pkl")
 APP_STORAGE_PATH = os.path.abspath(
     os.getenv(
         "APP_STORAGE_PATH",
@@ -91,7 +95,14 @@ def _load_pickle(path):
 ml_model = _load_pickle(MODEL_PATH)
 if ml_model is None:
     ml_model = _load_pickle(LEGACY_MODEL_PATH)
+if ml_model is None:
+    ml_model = _load_pickle(ROOT_MODEL_PATH)
+if ml_model is None:
+    ml_model = _load_pickle(ROOT_LEGACY_MODEL_PATH)
+
 ml_vectorizer = _load_pickle(VECTORIZER_PATH)
+if ml_vectorizer is None:
+    ml_vectorizer = _load_pickle(ROOT_VECTORIZER_PATH)
 TFIDF_FEATURE_NAMES = ml_vectorizer.get_feature_names_out() if ml_vectorizer is not None else None
 
 
