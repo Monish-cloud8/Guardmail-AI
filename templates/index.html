@@ -174,6 +174,17 @@
             <div class="list-placeholder">Loading inbox...</div>
           </div>
 
+          <div id="scan-status-banner" class="scan-status-banner hidden">
+            <div class="scan-status-copy">
+              <strong id="scan-status-title">Scanning inbox...</strong>
+              <span id="scan-status-text">Preparing Gmail scan.</span>
+            </div>
+            <div class="scan-status-actions">
+              <button id="scan-retry-btn" class="scan-status-button hidden" type="button">Retry</button>
+              <button id="scan-cancel-btn" class="scan-status-button hidden" type="button">Stop</button>
+            </div>
+          </div>
+
           <div id="scan-actions" class="scan-actions hidden">
             <button id="load-more-btn" class="load-more-button" type="button">Scan Next 20 Emails</button>
             <button id="scan-all-btn" class="scan-all-button" type="button">Scan Entire Inbox</button>
@@ -198,20 +209,51 @@
 
         <section id="panel-results" class="inspector-panel hidden">
           <div class="inspector-header">
-            <div>
+            <div class="inspector-title-row">
               <div id="res-sender" class="inspector-sender"></div>
-              <div id="res-subject" class="inspector-meta mono"></div>
+              <div class="inspector-title-status">
+                <div id="res-badge" class="threat-badge"></div>
+                <span id="res-confidence-summary" class="inspector-title-confidence mono"></span>
+              </div>
             </div>
-            <div class="inspector-score">
-              <div id="res-gauge" class="risk-gauge">
-                <div class="risk-gauge-ring"></div>
-                <div class="risk-gauge-center">
+
+            <div class="inspector-metadata" aria-label="Email metadata">
+              <div class="inspector-metadata-row">
+                <span class="inspector-field-label">Sender email</span>
+                <span id="res-email" class="inspector-field-value mono"></span>
+              </div>
+              <div class="inspector-metadata-row">
+                <span class="inspector-field-label">Domain</span>
+                <span id="res-domain" class="inspector-field-value mono"></span>
+              </div>
+              <div class="inspector-metadata-row">
+                <span class="inspector-field-label">Received</span>
+                <span id="res-date" class="inspector-field-value mono"></span>
+              </div>
+            </div>
+
+            <div class="inspector-subject-block">
+              <span class="inspector-field-label">Subject</span>
+              <div id="res-subject" class="inspector-subject"></div>
+            </div>
+
+            <div class="inspector-risk-summary">
+              <div class="inspector-risk-stats">
+                <div class="inspector-risk-stat">
+                  <span class="inspector-field-label">Risk score</span>
+                  <strong id="res-risk" class="mono"></strong>
+                </div>
+                <div class="inspector-risk-stat">
+                  <span class="inspector-field-label">Confidence</span>
                   <strong id="res-gauge-value" class="mono">0%</strong>
-                  <span>confidence</span>
                 </div>
               </div>
-              <div id="res-risk" class="mono"></div>
-              <div id="res-badge" class="threat-badge"></div>
+              <div class="inspector-confidence-copy">
+                <p>Combined local model and rule confidence for this email.</p>
+                <div id="res-gauge" class="inspector-confidence-meter" role="progressbar" aria-label="Analysis confidence" aria-valuemin="0" aria-valuemax="100">
+                  <span class="inspector-confidence-fill"></span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -226,13 +268,14 @@
 
           <div id="feedback-status" class="inspector-feedback-status hidden"></div>
 
-          <div class="inspector-tabbar">
+          <div class="inspector-tabbar" id="inspector-tabbar">
+            <div id="inspector-tab-indicator" class="inspector-tab-indicator" aria-hidden="true"></div>
             <button id="inspector-tab-overview" class="inspector-tab is-active" type="button">Overview</button>
             <button id="inspector-tab-investigation" class="inspector-tab" type="button">AI Investigation</button>
             <button id="inspector-tab-intel" class="inspector-tab" type="button">Threat Intelligence</button>
           </div>
 
-          <div id="inspector-section-overview" class="inspector-section">
+          <div id="inspector-section-overview" class="inspector-section is-active">
             <div class="inspector-grid">
               <section id="res-why-flagged-section" class="inspector-card hidden">
                 <div class="inspector-title">Why GuardMail AI flagged this</div>
@@ -300,6 +343,8 @@
     </section>
   </main>
 
+  <div id="app-toast-region" class="app-toast-region" aria-live="polite" aria-atomic="true"></div>
+
   <div id="scanning-overlay" class="scanning-overlay">
     <div class="scanning-grid"></div>
     <div id="matrix-rain" class="matrix-rain" aria-hidden="true"></div>
@@ -326,27 +371,21 @@
   </div>
 
   <aside id="copilot-shell" class="copilot-shell">
-    <button id="copilot-toggle" class="copilot-toggle" type="button" aria-expanded="false" aria-controls="copilot-panel">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-        <path d="M12 3l7 3v5c0 4.6-2.9 8.4-7 10-4.1-1.6-7-5.4-7-10V6l7-3z"></path>
-        <path d="M9 11h6M9 15h4"></path>
-      </svg>
-      <span>Security Copilot</span>
-    </button>
-
-    <section id="copilot-panel" class="copilot-panel hidden" aria-label="Security Copilot">
+    <section id="copilot-panel" class="copilot-panel" aria-label="GuardMail Assistant" aria-hidden="true">
       <header class="copilot-header">
         <div>
-          <div class="copilot-title">Security Copilot</div>
+          <div class="copilot-title">GuardMail Assistant</div>
           <div id="copilot-context" class="copilot-context">Ask about this app or the selected email.</div>
         </div>
-        <button id="copilot-close" class="copilot-close" type="button" aria-label="Close copilot">×</button>
+        <button id="copilot-close" class="copilot-close" type="button" aria-label="Close assistant">×</button>
       </header>
 
       <div id="copilot-suggestions" class="copilot-suggestions">
         <button class="copilot-suggestion" type="button" data-copilot-question="How do I scan my inbox?">How do I scan my inbox?</button>
-        <button class="copilot-suggestion" type="button" data-copilot-question="What does Scam Alert mean?">What does Scam Alert mean?</button>
-        <button class="copilot-suggestion" type="button" data-copilot-question="Why is this suspicious?">Why is this suspicious?</button>
+        <button class="copilot-suggestion" type="button" data-copilot-question="Why is this email suspicious?">Why is this email suspicious?</button>
+        <button class="copilot-suggestion" type="button" data-copilot-question="Should I trust this sender?">Should I trust this sender?</button>
+        <button class="copilot-suggestion" type="button" data-copilot-question="Explain this like I’m 12.">Explain this like I’m 12.</button>
+        <button class="copilot-suggestion" type="button" data-copilot-question="What should I do next?">What should I do next?</button>
       </div>
 
       <div id="copilot-log" class="chat-log"></div>
@@ -356,6 +395,16 @@
         <button id="copilot-send" class="inspector-action-button inspector-action-button-primary" type="submit">Ask</button>
       </form>
     </section>
+
+    <div class="copilot-launcher">
+      <div id="copilot-help-bubble" class="copilot-help-bubble" role="status">Need any help?</div>
+      <button id="copilot-toggle" class="copilot-toggle" type="button" aria-label="Open GuardMail Assistant" aria-expanded="false" aria-controls="copilot-panel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+          <path d="M12 3l7 3v5c0 4.6-2.9 8.4-7 10-4.1-1.6-7-5.4-7-10V6l7-3z"></path>
+          <path d="M9 10.5h.01M15 10.5h.01M9.5 15c1.5 1 3.5 1 5 0"></path>
+        </svg>
+      </button>
+    </div>
   </aside>
 
   <script src="/static/assistant.js"></script>

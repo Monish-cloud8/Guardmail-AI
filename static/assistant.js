@@ -1,153 +1,135 @@
 (function initGuardMailAssistant() {
   const APP_ANSWERS = {
-    scan: 'Use Refresh to rescan the latest inbox emails. Use "Scan Next 20 Emails" or "Scan Entire Inbox" when you want a wider sweep.',
-    scam_alert: 'Scam Alert is the highest risk level in this app. It means the local model and rule checks both found strong fraud signals.',
-    threat_intel: 'Threat Intelligence combines local checks on sender reputation, link patterns, attachment risk, and authentication results.',
-    trash: 'Use "Move Suspicious to Trash" from the Suspicious tab. The app moves messages to Gmail trash so they can still be recovered.',
-    whitelist: 'Open an email first, then use "Add to Safe Senders" in the analysis panel. Safe senders lower risk unless stronger scam signals are present.',
-    confidence: 'Confidence is the local model confidence behind the final risk level. Higher confidence means the model and rules agree more strongly.',
-    detection: 'This app uses your local phishing model, header forensics, link analysis, attachment checks, and sender/domain rules. No hosted AI is used.',
+    scan: 'Use Refresh to rescan recent messages, Scan Next 20 Emails for the next page, or Scan Entire Inbox for a full sweep.',
+    suspicious: 'Suspicious means local sender, language, link, attachment, or authentication checks found warning signs. Open the email to see the exact reasons.',
+    safe: 'Safe means the local checks found no strong threat signals. It is still wise to verify unexpected requests before clicking or replying.',
+    confidence: 'Confidence shows how strongly the local model and rules agree with the displayed risk level. It is not a guarantee by itself.',
+    risk: 'Risk level summarizes the local analysis: Safe, Unknown, Suspicious, or Scam Alert. Higher levels call for more caution.',
+    threat_intel: 'Threat Intelligence combines local sender-domain, link, attachment, authentication, safe-list, and block-list checks.',
+    links: 'Open an email and check its Links section. GuardMail locally flags shorteners, misleading display domains, and suspicious domain patterns.',
+    attachments: 'Open an email and check Attachment Warnings. GuardMail locally highlights risky file types and attachment signals.',
+    safe_senders: 'Open an email, then choose Add to Safe Senders. This lowers future risk unless stronger scam signals are present.',
+    blocked_senders: 'Open an email, then choose Block Sender. GuardMail records that sender locally and treats future messages as higher risk.',
+    trash: 'Open the Suspicious tab and choose Move Suspicious to Trash. Gmail trash is recoverable if you change your mind.',
+    how_it_works: 'GuardMail uses a local phishing model plus header, sender-domain, link, attachment, and language rules. It does not call a hosted AI service.',
   };
 
-  function extractDomain(value) {
-    if (!value) return '';
-    const match = String(value).match(/@([^>\s]+)/);
-    return (match ? match[1] : value).toLowerCase().replace(/^www\./, '').trim();
-  }
+  const includesAny = (text, terms) => terms.some((term) => text.includes(term));
 
-  function hasRiskyLinks(detail) {
-    return (detail.links || []).some((link) => link.usesShortener || link.displayDomainDiffers || link.looksSuspicious);
-  }
-
-  function riskyLinkSummary(detail) {
-    const links = detail.links || [];
+  function riskyLinkSummary(email) {
+    const links = email.links || [];
     if (!links.length) return 'No links were extracted from this email.';
-    return links
-      .map((link) => {
-        const tags = [];
-        if (link.usesShortener) tags.push('shortener');
-        if (link.displayDomainDiffers) tags.push('display mismatch');
-        if (link.looksSuspicious) tags.push('suspicious domain');
-        return `${link.domain || 'unknown domain'}${tags.length ? ` (${tags.join(', ')})` : ''}`;
-      })
-      .join('; ');
+    return links.map((link) => {
+      const flags = [];
+      if (link.usesShortener) flags.push('URL shortener');
+      if (link.displayDomainDiffers) flags.push('display-domain mismatch');
+      if (link.looksSuspicious) flags.push('suspicious domain');
+      return `${link.domain || 'Unknown domain'}${flags.length ? ` (${flags.join(', ')})` : ''}`;
+    }).join('; ');
   }
 
-  function attachmentSummary(detail) {
-    const attachments = detail.attachmentWarnings || [];
-    if (!attachments.length) return 'No risky attachments were detected.';
-    return attachments.map((item) => `${item.filename} (${item.warning})`).join('; ');
+  function attachmentSummary(email) {
+    const warnings = email.attachmentWarnings || [];
+    if (!warnings.length) return 'No risky attachments were detected.';
+    return `Attachment warnings: ${warnings.map((item) => item.filename || 'Unnamed attachment').join(', ')}.`;
   }
 
-  function generateExplanation(detail) {
-    const reasons = detail.reasons || [];
-    const auth = detail.authChain || {};
-    const sender = extractDomain(detail.senderEmail || '');
-    const points = [];
-
-    if (reasons.length) points.push(`Main reasons: ${reasons.slice(0, 3).join(', ')}.`);
-    if (detail.domainSignals?.length) points.push(`Sender domain checks found: ${detail.domainSignals.slice(0, 2).join(', ')}.`);
-    if (hasRiskyLinks(detail)) points.push(`Link checks found: ${riskyLinkSummary(detail)}.`);
-    if ((detail.attachmentWarnings || []).length) points.push(`Attachment checks found: ${attachmentSummary(detail)}.`);
-    if (auth.spf === 'FAIL' || auth.dkim === 'FAIL' || auth.dmarc === 'FAIL') points.push('Authentication checks failed for at least one of SPF, DKIM, or DMARC.');
-    if (!points.length && detail.riskLevel === 'Safe') points.push('No strong fraud indicators were found in the sender, links, attachments, or language.');
-    if (!points.length) points.push('The current local checks did not produce a specific explanation beyond the final risk score.');
-
-    return {
-      sender,
-      summary: points.join(' '),
-      recommendation: detail.riskLevel === 'Safe'
-        ? 'This looks okay from the current checks. Keep normal email caution.'
-        : detail.riskLevel === 'Scam Alert'
-          ? 'Do not click links or open attachments. Move it to trash or verify through another channel.'
-          : detail.riskLevel === 'Suspicious'
-            ? 'Treat it carefully and verify the sender before interacting.'
-            : 'Review the sender, links, and message intent before acting.',
-    };
+  function generateEmailExplanation(email) {
+    if (!email) return 'Select an email first so I can explain its analysis.';
+    const reasons = [...(email.reasons || []), ...(email.domainSignals || [])];
+    const risk = email.riskLevel || 'Unknown';
+    const confidence = email.confidenceScore ?? email.riskScore ?? 0;
+    const summary = reasons.length
+      ? `It is marked ${risk} at ${confidence}% confidence because of: ${reasons.slice(0, 3).join(', ')}.`
+      : risk === 'Safe'
+        ? `It is marked Safe at ${confidence}% confidence because no strong threat signals were found.`
+        : `It is marked ${risk} at ${confidence}% confidence by the local analysis.`;
+    const action = risk === 'Safe'
+      ? 'Keep normal caution, especially for unexpected requests.'
+      : risk === 'Scam Alert'
+        ? 'Do not click links or open attachments; verify independently or move it to trash.'
+        : 'Verify the sender through another channel before interacting.';
+    return `${summary} ${action}`;
   }
 
-  function detectIntent(question, hasSelectedEmail) {
+  function detectAssistantIntent(question, hasSelectedEmail = false) {
     const q = String(question || '').trim().toLowerCase();
     if (!q) return 'help';
-    if (q.includes('scan') || q.includes('inbox') || q.includes('refresh')) return 'scan';
-    if (q.includes('scam alert') || q.includes('risk level')) return 'scam_alert';
-    if (q.includes('threat intelligence') || q.includes('intel')) return 'threat_intel';
-    if (q.includes('trash') || q.includes('delete') || q.includes('move')) return 'trash';
-    if (q.includes('white') || q.includes('safe sender') || q.includes('allow')) return 'whitelist';
-    if (q.includes('confidence') || q.includes('score')) return 'confidence';
-    if (q.includes('how') && q.includes('detect')) return 'detection';
-    if (hasSelectedEmail && (q.includes('why') || q.includes('explain'))) return 'email_explain';
-    if (hasSelectedEmail && (q.includes('safe') || q.includes('trust'))) return 'email_trust';
-    if (hasSelectedEmail && q.includes('link')) return 'email_links';
-    if (hasSelectedEmail && q.includes('attachment')) return 'email_attachments';
-    if (hasSelectedEmail && (q.includes('do') || q.includes('should i') || q.includes('action'))) return 'email_action';
-    if (hasSelectedEmail && (q.includes('12') || q.includes('simple'))) return 'email_simple';
-    return hasSelectedEmail ? 'email_explain' : 'out_of_scope';
+    if (includesAny(q, ['explain this like', 'like i am 12', "like i'm 12", 'in simple terms'])) return hasSelectedEmail ? 'email_simple' : 'how_it_works';
+    if (includesAny(q, ['what should i do', 'what do i do', 'next step', 'action should'])) return hasSelectedEmail ? 'email_action' : 'help';
+    if (includesAny(q, ['why is this', 'why was this', 'why suspicious', 'why safe', 'explain this email'])) return hasSelectedEmail ? 'email_explain' : 'suspicious';
+    if (includesAny(q, ['trust this sender', 'trust the sender', 'trust this email', 'is this safe', 'does this look safe'])) return hasSelectedEmail ? 'email_trust' : 'safe_senders';
+    if (includesAny(q, ['scan', 'inbox', 'refresh'])) return 'scan';
+    if (includesAny(q, ['confidence'])) return hasSelectedEmail ? 'email_confidence' : 'confidence';
+    if (includesAny(q, ['risk level', 'risk score'])) return hasSelectedEmail ? 'email_risk' : 'risk';
+    if (includesAny(q, ['threat intelligence', 'threat intel'])) return hasSelectedEmail ? 'email_intel' : 'threat_intel';
+    if (includesAny(q, ['attachment', 'file'])) return hasSelectedEmail ? 'email_attachments' : 'attachments';
+    if (includesAny(q, ['link', 'url'])) return hasSelectedEmail ? 'email_links' : 'links';
+    if (includesAny(q, ['safe sender', 'allowlist', 'whitelist'])) return 'safe_senders';
+    if (includesAny(q, ['blocked sender', 'blocklist', 'block sender'])) return 'blocked_senders';
+    if (includesAny(q, ['trash', 'delete', 'remove email'])) return 'trash';
+    if (includesAny(q, ['how does', 'how do you', 'how it works', 'detect scam'])) return 'how_it_works';
+    if (includesAny(q, ['suspicious', 'phishing', 'scam'])) return hasSelectedEmail ? 'email_explain' : 'suspicious';
+    if (includesAny(q, ['safe email', 'safe emails'])) return hasSelectedEmail ? 'email_trust' : 'safe';
+    return 'out_of_scope';
   }
 
-  function answerAboutApplication(intent, context) {
+  function generateAppHelpAnswer(intent, context = {}) {
     if (intent === 'help') {
       return context.selectedEmail
-        ? 'Ask about why the selected email was flagged, whether its links look risky, whether you should trust the sender, or what action to take.'
-        : 'Ask how scanning works, what Scam Alert means, how confidence works, how to move suspicious emails to trash, or how to safe-list a sender.';
+        ? 'Ask why this email was flagged, whether to trust it, or about its links, attachments, confidence, and next steps.'
+        : 'Ask how to scan your inbox, understand risk and confidence, manage senders, or move suspicious messages to trash.';
     }
-    if (APP_ANSWERS[intent]) return APP_ANSWERS[intent];
-    return 'I can currently answer questions about this application and the selected email.';
+    return APP_ANSWERS[intent] || 'I can help with GuardMail AI and the selected email analysis.';
   }
 
-  function answerAboutSelectedEmail(intent, context) {
-    const detail = context.selectedEmail;
-    if (!detail) return 'Select an email first, then I can explain its sender, links, attachments, and risk score.';
-
-    const explanation = generateExplanation(detail);
-    const riskLabel = detail.riskLevel || 'Safe';
-    const confidence = detail.confidenceScore ?? detail.riskScore ?? 0;
-
-    if (intent === 'email_simple') {
-      return riskLabel === 'Safe'
-        ? 'This one looks okay. I did not find strong warning signs.'
-        : `This email might be trying to trick you. The main warning is that it looks ${riskLabel.toLowerCase()} and the app found scam-like patterns.`;
+  function answerSelectedEmail(intent, email) {
+    if (!email) return 'Select an email first so I can use its analysis.';
+    const risk = email.riskLevel || 'Unknown';
+    const confidence = email.confidenceScore ?? email.riskScore ?? 0;
+    if (intent === 'email_links') return riskyLinkSummary(email);
+    if (intent === 'email_attachments') return attachmentSummary(email);
+    if (intent === 'email_confidence') return `Confidence is ${confidence}%. That shows how strongly the local model and rules agree with the ${risk} result.`;
+    if (intent === 'email_intel') {
+      const linkCount = (email.links || []).length;
+      const attachmentCount = (email.attachmentWarnings || []).length;
+      return `${generateEmailExplanation(email)} Threat Intelligence reviewed ${linkCount} link(s), ${attachmentCount} attachment warning(s), and the sender is ${email.senderStatus || 'not listed'}.`;
     }
-    if (intent === 'email_trust') {
-      return riskLabel === 'Safe'
-        ? `This currently looks safe. Confidence is ${confidence}%, and the local checks did not find major fraud indicators.`
-        : `I would be careful. This email is marked ${riskLabel} at ${confidence}% confidence. ${explanation.recommendation}`;
-    }
-    if (intent === 'email_links') {
-      return riskyLinkSummary(detail);
-    }
-    if (intent === 'email_attachments') {
-      return attachmentSummary(detail);
-    }
-    if (intent === 'email_action') {
-      return explanation.recommendation;
-    }
-    return `${explanation.summary} ${explanation.recommendation}`;
+    if (intent === 'email_risk') return generateEmailExplanation(email);
+    if (intent === 'email_simple') return risk === 'Safe'
+      ? 'This email looks okay because GuardMail did not find strong warning signs.'
+      : `This email may be trying to trick you. GuardMail marked it ${risk}, so do not rush to click or reply.`;
+    if (intent === 'email_trust') return risk === 'Safe'
+      ? `It currently looks safe at ${confidence}% confidence, but verify any unexpected request.`
+      : `I would not trust it yet. It is marked ${risk} at ${confidence}% confidence. Verify the sender another way.`;
+    return generateEmailExplanation(email);
   }
 
-  function answerQuestion(question, context) {
+  function answerAssistantQuestion(question, selectedEmail, appState = {}) {
     if (window.GuardMailAssistant.futureModel.answer) {
-      return window.GuardMailAssistant.futureModel.answer(question, context);
+      return window.GuardMailAssistant.futureModel.answer(question, selectedEmail, appState);
     }
-
-    const hasSelectedEmail = Boolean(context.selectedEmail);
-    const intent = detectIntent(question, hasSelectedEmail);
-
-    if (intent.startsWith('email_')) {
-      return answerAboutSelectedEmail(intent, context);
-    }
-    return answerAboutApplication(intent, context);
+    const intent = detectAssistantIntent(question, Boolean(selectedEmail));
+    return intent.startsWith('email_')
+      ? answerSelectedEmail(intent, selectedEmail)
+      : generateAppHelpAnswer(intent, { ...appState, selectedEmail });
   }
 
   window.GuardMailAssistant = {
-    detectIntent,
-    answerQuestion,
-    generateExplanation,
-    answerAboutApplication,
-    answerAboutSelectedEmail,
+    detectAssistantIntent,
+    answerAssistantQuestion,
+    generateEmailExplanation,
+    generateAppHelpAnswer,
+    answerQuestion(question, context = {}) {
+      return answerAssistantQuestion(question, context.selectedEmail, context);
+    },
     futureModel: {
-      // ponytail: swap this with your own local NLP model later without changing the copilot UI.
+      // ponytail: replace this hook with a local model later; the UI and fallback rules stay unchanged.
       answer: null,
     },
   };
+
+  console.assert(detectAssistantIntent('How do I scan my inbox?') === 'scan');
+  console.assert(detectAssistantIntent('Are the links safe?', true) === 'email_links');
+  console.assert(answerAssistantQuestion('Tell me a joke', null) === 'I can help with GuardMail AI and the selected email analysis.');
 })();

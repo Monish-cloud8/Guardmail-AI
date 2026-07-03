@@ -20,7 +20,6 @@ Thumbs.db
 
 # Vercel: Ignore local development build logs
 .vercel/
-
 # ML: Ignore local training dataset and trained model artifacts
 phishing_emails.csv
 phishing_email.csv

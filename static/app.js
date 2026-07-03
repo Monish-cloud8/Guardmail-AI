@@ -60,6 +60,12 @@ const state = {
   nextPageToken: null,
   chatHistoryByEmail: {},
   copilotOpen: false,
+  isLoading: false,
+  scanAllActive: false,
+  scanCancelled: false,
+  scannedCount: 0,
+  activeRequestController: null,
+  lastLoadRequest: null,
 };
 
 let glyphInterval = null;
@@ -103,6 +109,45 @@ function escapeHtml(value) {
   const div = document.createElement('div');
   div.textContent = value ?? '';
   return div.innerHTML;
+}
+
+function showToast(message, tone = 'error', detail = '') {
+  const region = byId('app-toast-region');
+  if (!region || !message) return;
+
+  const toast = document.createElement('div');
+  toast.className = `app-toast is-${tone}`;
+  toast.innerHTML = `
+    <div class="app-toast-copy">
+      <strong>${escapeHtml(message)}</strong>
+      ${detail ? `<span>${escapeHtml(detail)}</span>` : ''}
+    </div>
+    <button class="app-toast-close" type="button" aria-label="Dismiss notification">×</button>
+  `;
+
+  const removeToast = () => {
+    toast.classList.add('is-leaving');
+    window.setTimeout(() => toast.remove(), 220);
+  };
+
+  toast.querySelector('.app-toast-close')?.addEventListener('click', removeToast);
+  region.appendChild(toast);
+  window.setTimeout(removeToast, 5200);
+}
+
+function updateScanStatus({ visible = false, title = '', message = '', retry = false, cancel = false, tone = 'default' } = {}) {
+  const banner = byId('scan-status-banner');
+  if (!banner) return;
+
+  banner.className = `scan-status-banner${visible ? '' : ' hidden'}${tone !== 'default' ? ` is-${tone}` : ''}`;
+  byId('scan-status-title').textContent = title || 'Scanning inbox...';
+  byId('scan-status-text').textContent = message || '';
+  byId('scan-retry-btn').classList.toggle('hidden', !retry);
+  byId('scan-cancel-btn').classList.toggle('hidden', !cancel);
+}
+
+function clearScanStatus() {
+  updateScanStatus({ visible: false, title: '', message: '', retry: false, cancel: false });
 }
 
 function initTheme() {
@@ -163,7 +208,7 @@ function initAccountMenu() {
         if (!response.ok) throw new Error(data.error || 'Failed to switch account');
         window.location.reload();
       } catch (error) {
-        alert(`Error: ${error.message}`);
+        showToast('Unable to switch account.', 'error', error.message);
       }
     });
   });
@@ -541,14 +586,41 @@ function detailBullet(text, warning) {
   `;
 }
 
+function formatReceivedAt(value) {
+  if (!value) return 'Unknown date';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+function updateInspectorTabIndicator() {
+  const tabbar = byId('inspector-tabbar');
+  if (!tabbar) return;
+  const tabs = ['overview', 'investigation', 'intel'];
+  const activeIndex = Math.max(0, tabs.indexOf(state.inspectorTab));
+  tabbar.style.setProperty('--active-tab', activeIndex);
+}
+
 function setInspectorTab(tab) {
   state.inspectorTab = tab;
   ['overview', 'investigation', 'intel'].forEach((key) => {
     const tabButton = byId(`inspector-tab-${key}`);
     const section = byId(`inspector-section-${key}`);
     if (tabButton) tabButton.classList.toggle('is-active', key === tab);
-    if (section) section.classList.toggle('hidden', key !== tab);
+    if (section) {
+      const active = key === tab;
+      section.classList.toggle('hidden', !active);
+      section.classList.toggle('is-active', active);
+      if (active) {
+        section.classList.remove('is-entering');
+        window.requestAnimationFrame(() => section.classList.add('is-entering'));
+      }
+    }
   });
+  window.requestAnimationFrame(updateInspectorTabIndicator);
 }
 
 function levelFromScore(score) {
@@ -720,52 +792,6 @@ function analyzeLocalThreatIntel(detail) {
   };
 }
 
-function answerEmailQuestion(question, detail) {
-  const q = (question || '').trim().toLowerCase();
-  const investigation = generateThreatInvestigation(detail);
-  const threatIntel = analyzeLocalThreatIntel(detail);
-  const reasons = detail.reasons || [];
-  const links = detail.links || [];
-  const attachments = detail.attachmentWarnings || [];
-
-  if (!q) {
-    return 'Ask about why this email was flagged, whether it looks safe, risky links, attachments, or what action to take.';
-  }
-  if (q.includes('12') || q.includes('simple')) {
-    return detail.riskLevel === 'Safe'
-      ? 'This one looks okay. I did not find strong warning signs in the sender, links, or attachments.'
-      : `This email might be trying to trick you. The main warnings are: ${(reasons.slice(0, 2).join(', ') || 'suspicious patterns')}.`;
-  }
-  if (q.includes('why') || q.includes('suspicious')) {
-    return reasons.length
-      ? `It was flagged because of: ${reasons.join(', ')}. ${investigation.recommendation}`
-      : investigation.explanation;
-  }
-  if (q.includes('trust') || q.includes('safe')) {
-    return detail.riskLevel === 'Safe'
-      ? 'This currently looks safe from the app’s local checks, but still use normal caution.'
-      : `I would be careful. Risk level is ${detail.riskLevel} at ${investigation.confidence}% confidence. ${investigation.recommendation}`;
-  }
-  if (q.includes('link')) {
-    return links.length
-      ? `Risky link summary: ${links.map((link) => `${link.domain || 'unknown domain'}${link.usesShortener ? ' (shortener)' : ''}${link.displayDomainDiffers ? ' (display mismatch)' : ''}`).join('; ')}.`
-      : 'There are no links extracted from this email.';
-  }
-  if (q.includes('attachment')) {
-    return attachments.length
-      ? `Attachment warnings: ${attachments.map((item) => item.filename).join(', ')}.`
-      : 'No risky attachments were detected.';
-  }
-  if (q.includes('do') || q.includes('action') || q.includes('should i')) {
-    return investigation.recommendation;
-  }
-  if (q.includes('confidence')) {
-    return `The confidence score is ${investigation.confidence}%. In this app, that means how strongly the local model and rules agree with the final risk label.`;
-  }
-
-  return 'I can answer questions about why this email was flagged, whether it looks safe, risky links, attachments, or what action to take.';
-}
-
 function renderThreatInvestigation(detail) {
   const investigation = generateThreatInvestigation(detail);
   const steps = [
@@ -870,29 +896,36 @@ function assistantContext(detail = state.selectedDetail) {
   };
 }
 
-function copilotSuggestions(detail = state.selectedDetail) {
-  if (detail) {
-    return [
-      'Why is this suspicious?',
-      'What links are dangerous?',
-      'What should I do?',
-    ];
-  }
+function copilotSuggestions() {
   return [
     'How do I scan my inbox?',
-    'What does Scam Alert mean?',
-    'How does this application detect scams?',
+    'Why is this email suspicious?',
+    'Should I trust this sender?',
+    'Explain this like I’m 12.',
+    'What should I do next?',
   ];
 }
 
 function setCopilotOpen(open) {
   state.copilotOpen = open;
-  byId('copilot-panel').classList.toggle('hidden', !open);
   byId('copilot-shell').classList.toggle('is-open', open);
   byId('copilot-toggle').setAttribute('aria-expanded', String(open));
+  byId('copilot-toggle').setAttribute('aria-label', open ? 'Close GuardMail Assistant' : 'Open GuardMail Assistant');
+  byId('copilot-panel').setAttribute('aria-hidden', String(!open));
   if (open) {
+    localStorage.setItem('guardmail-assistant-opened', 'true');
+    byId('copilot-help-bubble')?.classList.add('is-hidden');
     byId('copilot-input').focus();
   }
+}
+
+function initCopilotHelpBubble() {
+  const bubble = byId('copilot-help-bubble');
+  if (!bubble || localStorage.getItem('guardmail-assistant-opened') === 'true') {
+    bubble?.classList.add('is-hidden');
+    return;
+  }
+  window.setTimeout(() => bubble.classList.add('is-hidden'), 6500);
 }
 
 function renderCopilot(detail = state.selectedDetail) {
@@ -913,7 +946,7 @@ function renderCopilot(detail = state.selectedDetail) {
   byId('copilot-log').innerHTML = history.length
     ? history.map((item) => `
       <div class="chat-message chat-message-${item.role}">
-        <strong>${item.role === 'user' ? 'You' : 'Security Copilot'}</strong>
+        <strong>${item.role === 'user' ? 'You' : 'GuardMail Assistant'}</strong>
         <div>${escapeHtml(item.text)}</div>
       </div>
     `).join('')
@@ -949,16 +982,25 @@ function submitCopilotQuestion(question) {
 function renderResults(email, detail) {
   const analysis = detail.analysis || {};
   const riskScore = detail.riskScore ?? analysis.riskScore ?? 0;
+  const rawConfidence = detail.confidenceScore ?? analysis.confidence ?? riskScore;
+  const confidenceScore = Math.max(0, Math.min(100, Number(rawConfidence) || 0));
   const riskLevel = detail.riskLevel || analysis.riskLevel || 'Safe';
   const isSafe = riskLevel === 'Safe';
+  const emailDomain = extractDomain(email.senderEmail || detail.senderEmail || '') || 'Unknown domain';
+  const receivedAt = formatReceivedAt(email.timestamp || detail.timestamp);
 
   byId('res-sender').textContent = email.senderName || email.senderEmail || 'Unknown sender';
-  byId('res-subject').textContent = `${email.senderEmail || ''} | ${email.timestamp || ''}`;
+  byId('res-email').textContent = email.senderEmail || detail.senderEmail || 'Unknown sender';
+  byId('res-domain').textContent = emailDomain;
+  byId('res-date').textContent = receivedAt;
+  byId('res-subject').textContent = email.subject || detail.subject || '(No subject)';
   byId('res-body').textContent = detail.body || email.preview || '';
   byId('res-risk').textContent = `${riskScore}%`;
-  byId('res-gauge').style.setProperty('--risk-pct', `${riskScore}%`);
-  byId('res-gauge').style.setProperty('--risk-color', colorForScore(riskScore));
-  byId('res-gauge-value').textContent = `${riskScore}%`;
+  byId('res-gauge').style.setProperty('--risk-pct', `${confidenceScore}%`);
+  byId('res-gauge').style.setProperty('--risk-color', colorForScore(confidenceScore));
+  byId('res-gauge').setAttribute('aria-valuenow', String(confidenceScore));
+  byId('res-gauge-value').textContent = `${confidenceScore}%`;
+  byId('res-confidence-summary').textContent = `${confidenceScore}% confidence`;
 
   const badge = byId('res-badge');
   badge.className = `threat-badge ${clsForRisk(riskLevel)} mono`;
@@ -1081,6 +1123,7 @@ function renderResults(email, detail) {
   renderChat(detail);
 
   setPanelState('panel-results');
+  window.requestAnimationFrame(updateInspectorTabIndicator);
 }
 
 function buildAnalyzedEntry(emailObj) {
@@ -1269,14 +1312,14 @@ function initOverlayFx() {
   }, 320);
 }
 
-async function fetchPage(pageToken) {
+async function fetchPage(pageToken, signal) {
   const params = new URLSearchParams();
   if (pageToken) params.set('pageToken', pageToken);
   if (state.searchQuery) params.set('q', state.searchQuery);
 
   const baseUrl = state.searchQuery ? '/api/search' : '/api/emails';
   const queryString = params.toString();
-  const response = await fetch(queryString ? `${baseUrl}?${queryString}` : baseUrl);
+  const response = await fetch(queryString ? `${baseUrl}?${queryString}` : baseUrl, { signal });
   const data = await response.json();
 
   if (!response.ok) {
@@ -1288,21 +1331,67 @@ async function fetchPage(pageToken) {
 
 function updateLoadButtonLoading(loading) {
   const button = byId('load-more-btn');
-  button.disabled = loading;
+  button.disabled = loading || state.scanAllActive;
   button.textContent = loading ? 'Scanning Next 20...' : 'Scan Next 20 Emails';
   const scanAllButton = byId('scan-all-btn');
   if (scanAllButton) {
-    scanAllButton.disabled = loading;
-    scanAllButton.textContent = loading ? 'Scanning Inbox...' : 'Scan Entire Inbox';
+    scanAllButton.disabled = loading || state.scanAllActive;
+    scanAllButton.textContent = state.scanAllActive ? 'Scanning Inbox...' : (loading ? 'Scanning Inbox...' : 'Scan Entire Inbox');
   }
 }
 
+function cancelScanAll() {
+  if (!state.scanAllActive) return;
+  state.scanCancelled = true;
+  state.activeRequestController?.abort();
+  updateScanStatus({
+    visible: true,
+    title: 'Inbox scan stopped',
+    message: `Scanning paused after ${state.scannedCount} emails checked. You can retry any time.`,
+    retry: true,
+    cancel: false,
+    tone: 'warning',
+  });
+}
+
 async function scanEntireInbox() {
-  if (!state.nextPageToken || state.searchQuery) return;
+  if (!state.nextPageToken || state.searchQuery || state.scanAllActive) return;
+  state.scanAllActive = true;
+  state.scanCancelled = false;
+  state.scannedCount = state.emails.length;
+  state.lastLoadRequest = { pageToken: state.nextPageToken, append: true };
   updateLoadButtonLoading(true);
-  while (state.nextPageToken) {
-    await loadEmailsInternal(state.nextPageToken, true, { silent: true, keepButtonLoading: true });
+  updateScanStatus({
+    visible: true,
+    title: 'Scanning inbox...',
+    message: `${state.scannedCount} emails checked so far.`,
+    retry: false,
+    cancel: true,
+  });
+
+  while (state.nextPageToken && !state.scanCancelled) {
+    const loaded = await loadEmailsInternal(state.nextPageToken, true, {
+      silent: true,
+      keepButtonLoading: true,
+      scanningAll: true,
+    });
+    if (!loaded) break;
   }
+
+  if (!state.scanCancelled && !state.nextPageToken) {
+    updateScanStatus({
+      visible: true,
+      title: 'Inbox scan complete',
+      message: `${state.scannedCount} emails checked across the inbox.`,
+      retry: false,
+      cancel: false,
+      tone: 'success',
+    });
+    window.setTimeout(clearScanStatus, 2200);
+  }
+
+  state.scanAllActive = false;
+  state.scanCancelled = false;
   updateLoadButtonLoading(false);
 }
 
@@ -1316,6 +1405,10 @@ async function loadEmailsInternal(pageToken, append, options = {}) {
   let waitProgress = 18;
   let waitTick = null;
   let waitLogTick = null;
+
+  state.lastLoadRequest = { pageToken: pageToken || null, append };
+  state.isLoading = true;
+  state.activeRequestController = new AbortController();
 
   if (!options.silent) {
     spinner.textContent = '...';
@@ -1350,7 +1443,7 @@ async function loadEmailsInternal(pageToken, append, options = {}) {
   }
 
   try {
-    const data = await fetchPage(pageToken);
+    const data = await fetchPage(pageToken, state.activeRequestController.signal);
     window.clearInterval(waitTick);
     window.clearTimeout(waitLogTick);
     const newEmails = data.emails || [];
@@ -1382,6 +1475,19 @@ async function loadEmailsInternal(pageToken, append, options = {}) {
 
     state.emails = append ? [...state.emails, ...newEmails] : newEmails;
     state.nextPageToken = data.nextPageToken || null;
+    state.scannedCount = state.emails.length;
+
+    if (options.scanningAll) {
+      updateScanStatus({
+        visible: true,
+        title: 'Scanning inbox...',
+        message: `${state.scannedCount} emails checked so far.`,
+        retry: false,
+        cancel: true,
+      });
+    } else {
+      clearScanStatus();
+    }
 
     if (!options.silent) {
       appendOverlayLog('ui: rendering threat console');
@@ -1413,27 +1519,56 @@ async function loadEmailsInternal(pageToken, append, options = {}) {
       setOverlayProgress(100);
       window.setTimeout(() => setOverlayVisibility(false), 220);
     }
+    return true;
   } catch (error) {
     window.clearInterval(waitTick);
     window.clearTimeout(waitLogTick);
+    const aborted = error.name === 'AbortError';
     if (!options.silent) {
-      appendOverlayLog(`error: ${error.message}`);
-      setOverlayStage('Scan failed', error.message);
+      appendOverlayLog(`error: ${aborted ? 'Scan cancelled by user' : error.message}`);
+      setOverlayStage(aborted ? 'Scan cancelled' : 'Scan failed', aborted ? 'The inbox scan was stopped.' : error.message);
       setOverlayProgress(100);
     }
 
+    if (aborted) {
+      if (!options.silent) window.setTimeout(() => setOverlayVisibility(false), 120);
+      return false;
+    }
+
+    console.error('GuardMail load error:', error);
+
     if (append) {
-      alert(`Error loading more emails: ${error.message}`);
+      updateScanStatus({
+        visible: true,
+        title: 'Unable to load more emails',
+        message: 'Please try again.',
+        retry: true,
+        cancel: false,
+        tone: 'error',
+      });
+      showToast('Unable to load more emails. Please try again.', 'error', error.message);
       if (!options.silent) setOverlayVisibility(false);
     } else {
       byId('pipeline-list').innerHTML = `<div class="list-placeholder" style="color:var(--threat)">${escapeHtml(error.message)}</div>`;
       byId('panel-error-text').textContent = error.message;
       setPanelState('panel-error');
+      updateScanStatus({
+        visible: true,
+        title: state.searchQuery ? 'Search failed' : 'Inbox load failed',
+        message: 'Please try again.',
+        retry: true,
+        cancel: false,
+        tone: 'error',
+      });
+      showToast(state.searchQuery ? 'Search failed. Please try again.' : 'Unable to load inbox. Please try again.', 'error', error.message);
       if (!options.silent) window.setTimeout(() => setOverlayVisibility(false), 320);
     }
+    return false;
   } finally {
     window.clearInterval(waitTick);
     window.clearTimeout(waitLogTick);
+    state.isLoading = false;
+    state.activeRequestController = null;
     if (!options.silent) {
       spinner.textContent = '';
       spinner.classList.add('hidden');
@@ -1526,11 +1661,13 @@ function exportSelectedReport() {
 function bootDashboard() {
   if (!byId('sync-btn')) return;
   initTheme();
+  initCopilotHelpBubble();
   initAccountMenu();
   initSearchToggle();
   initOverlayFx();
   setInspectorTab('overview');
   renderCopilot();
+  window.addEventListener('resize', updateInspectorTabIndicator);
 
   byId('sync-btn').addEventListener('click', () => loadEmails());
   byId('tab-suspicious').addEventListener('click', () => {
@@ -1568,6 +1705,13 @@ function bootDashboard() {
 
   byId('scan-all-btn').addEventListener('click', async () => {
     await scanEntireInbox();
+  });
+  byId('scan-cancel-btn').addEventListener('click', cancelScanAll);
+  byId('scan-retry-btn').addEventListener('click', async () => {
+    const request = state.lastLoadRequest || { pageToken: null, append: false };
+    clearScanStatus();
+    updateLoadButtonLoading(Boolean(request.append));
+    await loadEmailsInternal(request.pageToken, request.append, { silent: false });
   });
 
   byId('delete-suspicious-btn').addEventListener('click', async () => {
@@ -1610,17 +1754,17 @@ function bootDashboard() {
       renderStats();
       renderPipeline();
       renderCampaignBanner();
-      alert(`${ids.length} suspicious emails moved to trash`);
+      showToast(`${ids.length} suspicious emails moved to trash.`, 'success');
     } catch (error) {
-      alert(`Error: ${error.message}`);
+      showToast('Unable to move suspicious emails to trash.', 'error', error.message);
     }
   });
 
-  byId('feedback-safe-btn').addEventListener('click', () => saveFeedback('mark_safe').catch((error) => alert(`Error: ${error.message}`)));
-  byId('feedback-scam-btn').addEventListener('click', () => saveFeedback('mark_scam').catch((error) => alert(`Error: ${error.message}`)));
-  byId('feedback-unsure-btn').addEventListener('click', () => saveFeedback('not_sure').catch((error) => alert(`Error: ${error.message}`)));
-  byId('safe-sender-btn').addEventListener('click', () => updateSenderList('safe').catch((error) => alert(`Error: ${error.message}`)));
-  byId('block-sender-btn').addEventListener('click', () => updateSenderList('block').catch((error) => alert(`Error: ${error.message}`)));
+  byId('feedback-safe-btn').addEventListener('click', () => saveFeedback('mark_safe').catch((error) => showToast('Unable to save feedback.', 'error', error.message)));
+  byId('feedback-scam-btn').addEventListener('click', () => saveFeedback('mark_scam').catch((error) => showToast('Unable to save feedback.', 'error', error.message)));
+  byId('feedback-unsure-btn').addEventListener('click', () => saveFeedback('not_sure').catch((error) => showToast('Unable to save feedback.', 'error', error.message)));
+  byId('safe-sender-btn').addEventListener('click', () => updateSenderList('safe').catch((error) => showToast('Unable to update safe senders.', 'error', error.message)));
+  byId('block-sender-btn').addEventListener('click', () => updateSenderList('block').catch((error) => showToast('Unable to block sender.', 'error', error.message)));
   byId('export-report-btn').addEventListener('click', exportSelectedReport);
   ['overview', 'investigation', 'intel'].forEach((tab) => {
     byId(`inspector-tab-${tab}`).addEventListener('click', () => setInspectorTab(tab));

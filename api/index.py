@@ -180,7 +180,10 @@ def _extract_display_domain(value: str) -> str:
     if not text:
         return ""
     if _looks_like_url(text):
-        parsed = urlparse(text if "://" in text else f"https://{text}")
+        try:
+            parsed = urlparse(text if "://" in text else f"https://{text}")
+        except ValueError:
+            return ""
         return (parsed.hostname or "").lower()
     return ""
 
@@ -494,8 +497,11 @@ def _extract_urls(body_text: str, html_text: str) -> list[dict]:
 
     for href, anchor_text in re.findall(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', html_text or "", flags=re.IGNORECASE | re.DOTALL):
         actual_url = href.strip()
-        parsed = urlparse(actual_url)
-        domain = (parsed.hostname or "").lower()
+        try:
+            parsed = urlparse(actual_url)
+            domain = (parsed.hostname or "").lower()
+        except ValueError:
+            domain = ""
         display_text = _strip_html(anchor_text).strip()
         display_domain = _extract_display_domain(display_text)
         key = (actual_url, display_text)
@@ -515,8 +521,11 @@ def _extract_urls(body_text: str, html_text: str) -> list[dict]:
         actual_url = url.strip()
         if not actual_url or any(link["actualUrl"] == actual_url for link in links):
             continue
-        parsed = urlparse(actual_url)
-        domain = (parsed.hostname or "").lower()
+        try:
+            parsed = urlparse(actual_url)
+            domain = (parsed.hostname or "").lower()
+        except ValueError:
+            domain = ""
         links.append({
             "displayText": None,
             "actualUrl": actual_url,
